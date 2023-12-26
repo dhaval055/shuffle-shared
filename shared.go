@@ -21356,3 +21356,124 @@ func parseSubflowResults(ctx context.Context, result ActionResult) (ActionResult
 
 	return result, true
 }
+
+func GenerateNotificationWorkflow(resp http.ResponseWriter, request *http.Request){
+	cors := HandleCors(resp, request)
+	if cors {
+		return
+	}
+
+	user, err := HandleApiAuthentication(resp, request)
+	if err != nil {
+		log.Printf("[WARNING] Api authentication failed : %s", err)
+		resp.WriteHeader(401)
+		resp.Write([]byte(`{"success": false}`))
+		return
+	}
+	_ = user
+
+	baseUrl := ""
+	if project.Environment == "onprem" {
+		log.Printf("[DEBUG] Onprem environment. Setting base url to localhost: for delete")
+		baseUrl = "http://172.17.14.38:5001"
+	}
+
+	url :=  baseUrl + "/api/v1/workflows"
+
+	body, err := ioutil.ReadAll(request.Body)
+	if err != nil {
+		log.Printf("[WARNING] Failed reading body generate notification workflow: %s", err)
+		resp.WriteHeader(401)
+		resp.Write([]byte(`{"success": false, "reason": "Failed reading body"}`))
+		return
+	}
+
+	// hardcoding for teams
+	type parsedBody struct {
+		AppName   string `json:"app_name"`
+		WebHook string `json:"webhook"`
+	}
+
+	var tmpBody parsedBody
+	parseErr := json.Unmarshal(body, &tmpBody)
+	if parseErr != nil {
+		log.Printf("[WARNING] Could not parse body generate notification workflow: %s", parseErr)
+		resp.WriteHeader(401)
+		resp.Write([]byte(`{"success": false, "reason": "Failed parsing body"}`))
+	}
+
+	apiKey := "46f71df7-eab2-4269-a2b9-d54bb56f10a6"
+
+	//workflow
+	var workflow = Workflow {
+		Name: "Teams Notification workflow",
+		Description: "Shuffle Generated Workflow",
+	}
+
+	wrokflowBodyJSON, err := json.Marshal(workflow)
+	if err != nil {
+		log.Printf("[ERROR] Failed marshalling workflow JSON data: %s", err)
+		resp.WriteHeader(400)
+		return 
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(wrokflowBodyJSON))
+	if err != nil {
+		log.Printf("[ERROR] Failed generating notification workflow: %s", err)
+		return 
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	client := &http.Client{}
+	response, err := client.Do(req)
+
+	if err != nil {
+		log.Printf("[ERROR] Failed generating notification workflow: %s", err)
+		return 
+	}
+
+	respBody, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		log.Printf("[ERROR] Failed reading body: %s", err)
+		return 
+	}
+	_ = respBody
+
+	// log.Printf("%+v",respBody)
+	defer response.Body.Close()
+
+	//now patch the workflow to have teams app setup
+
+	// workflow.ID = uuid.NewV4().String()
+	// workflow.Owner = user.Id
+	// workflow.Sharing = "private"
+	// user.ActiveOrg.Users = []UserMini{}
+	// workflow.ExecutingOrg = user.ActiveOrg
+	// workflow.OrgId = user.ActiveOrg.Id
+
+
+
+	// //action
+	// newAction := Action{}
+	// newAction.AppID = "824f5c23-99f7-4d3b-8b79-c47b31f1ff69"
+	// newAction.AppName = "Microsoft Teams"
+	// newAction.AppVersion = "1.0.0"
+	// newAction.ID = uuid.NewV4().String()
+	// newAction.Name = "Send message"
+
+	// //parameters
+	// parameters := []WorkflowAppActionParameter{
+	// 	{
+	// 		Name:  "apikey",
+	// 		Value: apiKey,
+	// 	},
+	// 	{
+	// 		Name:  "apikey",
+	// 		Value: apiKey,
+	// 	}
+	// }
+
+	resp.Write([]byte("done"))
+}
